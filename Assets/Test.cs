@@ -1,5 +1,6 @@
 using UnityEngine;
 using YoloV4Tiny;
+using System.Linq;
 
 public sealed class Test : MonoBehaviour
 {
@@ -27,6 +28,13 @@ public sealed class Test : MonoBehaviour
 
         _material1.SetColor("_FillColor", Color.red);
         _material2.SetColor("_FillColor", Color.blue);
+
+        _material1.SetFloatArray
+          //("_Anchors", new float [] { 10, 14, 23, 27, 37, 58 });
+          ("_Anchors", new float [] { 10, 14, 23, 27, 37, 58 });
+
+        _material2.SetFloatArray
+          ("_Anchors", new float [] { 81/4, 82/4, 135/4, 169/4, 344/4, 319/4 });
     }
 
     void OnDestroy()
