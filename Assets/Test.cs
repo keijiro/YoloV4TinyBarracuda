@@ -1,6 +1,7 @@
 using UnityEngine;
 using Klak.TestTools;
 using YoloV4Tiny;
+using System.Linq;
 
 public sealed class Test : MonoBehaviour
 {
@@ -12,6 +13,16 @@ public sealed class Test : MonoBehaviour
     ObjectDetector _detector;
     Material _material1;
     Material _material2;
+
+    static readonly int[] _anchors =
+      { 10, 14, 23, 27, 37, 58, 81, 82, 135, 169, 344, 319 };
+
+    float[] MakeAnchorArray(int i1, int i2, int i3)
+    {
+        return (new [] {i1, i2, i3})
+          .SelectMany(i => new[] {i * 2, i * 2 + 1})
+          .Select(i => _anchors[i] / 416.0f).ToArray();
+    }
 
     void Start()
     {
@@ -29,12 +40,8 @@ public sealed class Test : MonoBehaviour
         _material1.SetColor("_FillColor", Color.red);
         _material2.SetColor("_FillColor", Color.blue);
 
-        _material1.SetFloatArray
-          //("_Anchors", new float [] { 10, 14, 23, 27, 37, 58 });
-          ("_Anchors", new float [] { 10, 14, 23, 27, 37, 58 });
-
-        _material2.SetFloatArray
-          ("_Anchors", new float [] { 81/4, 82/4, 135/4, 169/4, 344/4, 319/4 });
+        _material1.SetFloatArray("_Anchors", MakeAnchorArray(3, 4, 5));
+        _material2.SetFloatArray("_Anchors", MakeAnchorArray(1, 2, 3));
     }
 
     void OnDestroy()

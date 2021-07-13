@@ -39,20 +39,20 @@ Shader "Hidden/YOLOv4-tiny/Visualizer"
         c = Sigmoid(c);
         x = Sigmoid(x) / _GridCount;
         y = Sigmoid(y) / _GridCount;
-        w = exp(w) * _Anchors[anchor * 2 + 0] / _GridCount;
-        h = exp(h) * _Anchors[anchor * 2 + 1] / _GridCount;
+        w = exp(w) * _Anchors[anchor * 2 + 0];
+        h = exp(h) * _Anchors[anchor * 2 + 1];
 
         float vx = idx % _GridCount; 
         float vy = idx / _GridCount; 
 
-        vx += 0.5;
-        vy += 0.5;
+        vx = (vx + 0.5) / _GridCount;
+        vy = (vy + 0.5) / _GridCount;
 
-        vx += w * 2 * lerp(-0.5, 0.5, vid & 1);
-        vy += h * 2 * lerp(-0.5, 0.5, vid < 2 || vid == 5);
+        vx += w * lerp(-0.5, 0.5, vid & 1);
+        vy += h * lerp(-0.5, 0.5, vid < 2 || vid == 5);
 
-        vx =  x +     vx / _GridCount * 2 - 1;
-        vy = -y + 1 - vy / _GridCount * 2;
+        vx =  x +     vx * 2 - 1;
+        vy = -y + 1 - vy * 2;
 
         // Aspect ratio compensation
         vx = vx * _ScreenParams.y / _ScreenParams.x;
