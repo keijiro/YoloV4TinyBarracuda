@@ -1,11 +1,12 @@
 using UnityEngine;
+using Klak.TestTools;
 using YoloV4Tiny;
-using System.Linq;
 
 public sealed class Test : MonoBehaviour
 {
+    [SerializeField] ImageSource _source = null;
     [SerializeField] ResourceSet _resources = null;
-    [SerializeField] Texture2D _image = null;
+    [SerializeField] UnityEngine.UI.RawImage _preview = null;
     [SerializeField] Shader _shader = null;
 
     ObjectDetector _detector;
@@ -15,7 +16,6 @@ public sealed class Test : MonoBehaviour
     void Start()
     {
         _detector = new ObjectDetector(_resources);
-        _detector.ProcessImage(_image);
 
         _material1 = new Material(_shader);
         _material2 = new Material(_shader);
@@ -46,6 +46,8 @@ public sealed class Test : MonoBehaviour
 
     void LateUpdate()
     {
+        _detector.ProcessImage(_source.Texture);
+
         var bounds = new Bounds(Vector3.zero, Vector3.one * 1000);
 
         Graphics.DrawProcedural
@@ -53,5 +55,7 @@ public sealed class Test : MonoBehaviour
 
         Graphics.DrawProcedural
           (_material2, bounds, MeshTopology.Triangles, 6, 26 * 26 * 3);
+
+        _preview.texture = _source.Texture;
     }
 }

@@ -72,6 +72,7 @@ Shader "Hidden/YOLOv4-tiny/Visualizer"
 
     SubShader
     {
+        Tags { "Queue"="Overlay+100" }
         Pass
         {
             ZTest Always ZWrite Off Cull Off Blend One One
