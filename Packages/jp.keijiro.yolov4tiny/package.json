@@ -1,0 +1,13 @@
+{
+  "author": "Keijiro Takahashi",
+  "dependencies": { "com.unity.barracuda": "2.1.0-preview" },
+  "description": "YOLOv4 tiny object detection model with Unity Barracuda.",
+  "displayName": "YOLOv4-tiny",
+  "keywords": [ "unity" ],
+  "license": "MIT",
+  "name": "jp.keijiro.yolov4tiny",
+  "repository": "github:keijiro/YoloV4TinyBarracuda",
+  "unity": "2020.3",
+  "unityRelease": "0f1",
+  "version": "0.0.1"
+}

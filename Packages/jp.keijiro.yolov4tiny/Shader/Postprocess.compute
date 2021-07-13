@@ -1,0 +1,39 @@
+#pragma kernel Postprocess
+#pragma kernel Cleanup
+
+// Parameters
+uint2 Size;
+float Threshold;
+
+// Input buffers
+Texture2D<float> Scores;
+Texture2D<float4> Offsets;
+
+// Output buffer
+RWTexture2D<float4> Output;
+RWStructuredBuffer<uint> Counter;
+uint MaxDetection;
+
+[numthreads(8, 8, 1)]
+void Postprocess(uint2 id : SV_DispatchThreadID)
+{
+    if (Scores[id] < Threshold) return;
+
+    float4 offs = Offsets[id] * float2(1, -1).xyxy;
+    float4 pos = id.xyxy + offs;
+
+    uint count = Counter.IncrementCounter();
+    if (count < MaxDetection)
+        Output[uint2(count, 0)] = pos * 2 / Size.xyxy - 0.5;
+}
+
+[numthreads(64, 1, 1)]
+void Cleanup(uint id : SV_DispatchThreadID)
+{
+    while (true)
+    {
+        uint count = Counter.IncrementCounter();
+        if (count >= MaxDetection) break;
+        Output[uint2(count, 0)] = 0;
+    }
+}
