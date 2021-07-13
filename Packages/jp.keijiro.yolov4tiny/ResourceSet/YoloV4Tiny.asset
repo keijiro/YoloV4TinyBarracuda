@@ -13,5 +13,18 @@ MonoBehaviour:
   m_Name: YoloV4Tiny
   m_EditorClassIdentifier: 
   model: {fileID: 5022602860645237092, guid: d375a4501c43a47e3a9ad5efa5075cc2, type: 3}
+  anchors:
+  - 10
+  - 14
+  - 23
+  - 27
+  - 37
+  - 58
+  - 81
+  - 82
+  - 135
+  - 169
+  - 344
+  - 319
   preprocess: {fileID: 7200000, guid: 1f478f030d620431ea41cab27378b26f, type: 3}
   postprocess: {fileID: 7200000, guid: fd267ad85ba06463d940f94754fd8c67, type: 3}

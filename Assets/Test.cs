@@ -14,14 +14,11 @@ public sealed class Test : MonoBehaviour
     Material _material1;
     Material _material2;
 
-    static readonly int[] _anchors =
-      { 10, 14, 23, 27, 37, 58, 81, 82, 135, 169, 344, 319 };
-
     float[] MakeAnchorArray(int i1, int i2, int i3)
     {
         return (new [] {i1, i2, i3})
           .SelectMany(i => new[] {i * 2, i * 2 + 1})
-          .Select(i => _anchors[i] / 416.0f).ToArray();
+          .Select(i => _resources.anchors[i] / 416.0f).ToArray();
     }
 
     void Start()

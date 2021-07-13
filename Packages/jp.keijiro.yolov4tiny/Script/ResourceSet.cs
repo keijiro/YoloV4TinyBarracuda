@@ -8,6 +8,7 @@ namespace YoloV4Tiny {
 public sealed class ResourceSet : ScriptableObject
 {
     public NNModel model;
+    public float[] anchors = new float[12];
     public ComputeShader preprocess;
     public ComputeShader postprocess;
 }
