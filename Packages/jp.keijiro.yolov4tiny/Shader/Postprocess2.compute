@@ -7,8 +7,8 @@
 #include "Common.hlsl"
 
 // Input
-ConsumeStructuredBuffer<Detection> Input;
-ByteAddressBuffer Count;
+StructuredBuffer<Detection> Input;
+RWStructuredBuffer<uint> InputCount;
 float Threshold;
 
 // Output
@@ -22,12 +22,12 @@ groupshared bool _flags[MAX_DETECTION];
 void Postprocess2(uint3 id : SV_DispatchThreadID)
 {
     // Initialize data cache arrays
-    uint entry_count = Count.Load(0);
+    uint entry_count = min(MAX_DETECTION, InputCount.IncrementCounter());
     if (entry_count == 0) return;
 
     for (uint i = 0; i < entry_count; i++)
     {
-        _detections[i] = Input.Consume();
+        _detections[i] = Input[i];
         _flags[i] = true;
     }
 

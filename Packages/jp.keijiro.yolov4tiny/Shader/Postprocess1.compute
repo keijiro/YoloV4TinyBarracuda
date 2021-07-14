@@ -14,7 +14,8 @@ float2 Anchors[ANCHOR_COUNT];
 float Threshold;
 
 // Output buffer
-AppendStructuredBuffer<Detection> Output;
+RWStructuredBuffer<Detection> Output;
+RWStructuredBuffer<uint> OutputCount;
 
 [numthreads(8, 8, 1)]
 void Postprocess1(uint2 id : SV_DispatchThreadID)
@@ -60,6 +61,10 @@ void Postprocess1(uint2 id : SV_DispatchThreadID)
         data.score = Sigmoid(c) * maxScore / scoreSum;
 
         // Thresholding
-        if (data.score > Threshold) Output.Append(data);
+        if (data.score > Threshold)
+        {
+            uint count = OutputCount.IncrementCounter();
+            if (count < MAX_DETECTION) Output[count] = data;
+        }
     }
 }
