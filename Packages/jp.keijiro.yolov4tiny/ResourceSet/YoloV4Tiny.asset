@@ -27,4 +27,5 @@ MonoBehaviour:
   - 344
   - 319
   preprocess: {fileID: 7200000, guid: 1f478f030d620431ea41cab27378b26f, type: 3}
-  postprocess: {fileID: 7200000, guid: fd267ad85ba06463d940f94754fd8c67, type: 3}
+  postprocess1: {fileID: 7200000, guid: fd267ad85ba06463d940f94754fd8c67, type: 3}
+  postprocess2: {fileID: 7200000, guid: 048d33d12471042eb88d61743667afee, type: 3}
