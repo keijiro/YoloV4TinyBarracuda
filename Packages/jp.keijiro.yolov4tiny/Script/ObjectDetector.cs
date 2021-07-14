@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Unity.Barracuda;
 using UnityEngine;
 
@@ -26,6 +27,9 @@ public sealed class ObjectDetector : System.IDisposable
 
     public void SetIndirectDrawCount(ComputeBuffer drawArgs)
       => ComputeBuffer.CopyCount(_buffers.post2, drawArgs, sizeof(uint));
+
+    public IEnumerable<Detection> Detections
+      => _post2ReadCache ?? UpdatePost2ReadCache();
 
     #endregion
 
@@ -183,6 +187,21 @@ public sealed class ObjectDetector : System.IDisposable
 
         // Bounding box count after removal
         ComputeBuffer.CopyCount(_buffers.post2, _buffers.countRead, 0);
+    }
+
+    #endregion
+
+    #region GPU to CPU readback function
+
+    Detection[] _post2ReadCache;
+    int[] _countReadCache = new int[1];
+
+    Detection[] UpdatePost2ReadCache()
+    {
+        _buffers.countRead.GetData(_countReadCache, 0, 0, 1);
+        var buffer = new Detection[_countReadCache[0]];
+        _buffers.post2.GetData(buffer, 0, 0, buffer.Length);
+        return buffer;
     }
 
     #endregion
