@@ -30,14 +30,14 @@ public sealed class ObjectDetector : System.IDisposable
     #region Private objects
 
     ResourceSet _resources;
-    (int w, int h) _size;
+    int _inputSize;
     IWorker _worker;
 
     int FeatureMap1Size
-      => (_size.w / 32) * (_size.h / 32);
+      => _inputSize * _inputSize / (32 * 32);
 
     int FeatureMap2Size
-      => (_size.w / 16) * (_size.h / 16);
+      => _inputSize * _inputSize / (16 * 16);
 
     int FeatureDataSize
       => 25 * 3;
@@ -47,8 +47,8 @@ public sealed class ObjectDetector : System.IDisposable
      RenderTexture features2) _buffers;
 
     Vector4 GetAnchor(int i)
-      => new Vector4((float)_resources.anchors[i * 2 + 0] / _size.w,
-                     (float)_resources.anchors[i * 2 + 1] / _size.h, 0, 0);
+      => new Vector4((float)_resources.anchors[i * 2 + 0] / _inputSize,
+                     (float)_resources.anchors[i * 2 + 1] / _inputSize, 0, 0);
 
     void AllocateObjects(ResourceSet resources)
     {
@@ -56,12 +56,11 @@ public sealed class ObjectDetector : System.IDisposable
 
         var model = ModelLoader.Load(_resources.model);
 
-        var shape = model.inputs[0].shape; // NHWC
-        _size = (shape[6], shape[5]);      // (W, H)
+        _inputSize = model.inputs[0].shape[6]; // W in (****NHWC)
 
         _worker = model.CreateWorker();
 
-        _buffers = (new ComputeBuffer(_size.w * _size.h * 3, sizeof(float)),
+        _buffers = (new ComputeBuffer(_inputSize * _inputSize * 3, sizeof(float)),
                     RTUtil.NewFloat(FeatureDataSize, FeatureMap1Size),
                     RTUtil.NewFloat(FeatureDataSize, FeatureMap2Size));
     }
@@ -89,13 +88,13 @@ public sealed class ObjectDetector : System.IDisposable
     {
         // Preprocessing
         var pre = _resources.preprocess;
-        pre.SetInts("Size", _size.w, _size.h);
+        pre.SetInt("Size", _inputSize);
         pre.SetTexture(0, "Image", source);
         pre.SetBuffer(0, "Tensor", _buffers.preprocess);
-        pre.DispatchThreads(0, _size.w, _size.h, 1);
+        pre.DispatchThreads(0, _inputSize, _inputSize, 1);
 
         // NN worker invocation
-        using (var tensor = new Tensor(1, _size.h, _size.w, 3,
+        using (var tensor = new Tensor(1, _inputSize, _inputSize, 3,
                                        _buffers.preprocess))
             _worker.Execute(tensor);
 
