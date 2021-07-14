@@ -8,6 +8,7 @@ sealed class Visualizer : MonoBehaviour
     #region Editable attributes
 
     [SerializeField] ImageSource _source = null;
+    [SerializeField, Range(0, 1)] float _threshold = 0.5f;
     [SerializeField] ResourceSet _resources = null;
     [SerializeField] RawImage _preview = null;
     [SerializeField] Marker _markerPrefab = null;
@@ -40,7 +41,7 @@ sealed class Visualizer : MonoBehaviour
 
     void Update()
     {
-        _detector.ProcessImage(_source.Texture);
+        _detector.ProcessImage(_source.Texture, _threshold);
 
         var i = 0;
         foreach (var d in _detector.Detections)

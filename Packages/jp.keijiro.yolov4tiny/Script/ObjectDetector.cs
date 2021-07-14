@@ -14,8 +14,8 @@ public sealed class ObjectDetector : System.IDisposable
     public void Dispose()
       => DeallocateObjects();
 
-    public void ProcessImage(Texture sourceTexture)
-      => RunModel(sourceTexture);
+    public void ProcessImage(Texture sourceTexture, float threshold)
+      => RunModel(sourceTexture, threshold);
 
     public const int MaxDetection = 512;
 
@@ -134,7 +134,7 @@ public sealed class ObjectDetector : System.IDisposable
 
     #region Main inference function
 
-    void RunModel(Texture source)
+    void RunModel(Texture source, float threshold)
     {
         // Preprocessing
         var pre = _resources.preprocess;
@@ -165,7 +165,7 @@ public sealed class ObjectDetector : System.IDisposable
         post1.SetInt("InputSize", 13);
         post1.SetInt("ClassCount", _classCount);
         post1.SetFloats("Anchors", MakeAnchorArray(3, 4, 5));
-        post1.SetFloat("Threshold", 0.1f);
+        post1.SetFloat("Threshold", threshold);
         post1.SetBuffer(0, "Output", _buffers.post1);
         post1.SetBuffer(0, "OutputCount", _buffers.count);
         post1.DispatchThreads(0, 13, 13, 1);
