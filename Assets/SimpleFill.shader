@@ -1,4 +1,4 @@
-Shader "Hidden/YOLOv4-tiny/Visualizer"
+Shader "Hidden/YOLOv4-tiny/SimpleFill"
 {
     CGINCLUDE
 
