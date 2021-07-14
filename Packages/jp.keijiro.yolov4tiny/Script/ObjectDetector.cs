@@ -24,6 +24,9 @@ public sealed class ObjectDetector : System.IDisposable
     public ComputeBuffer DetectionBuffer => _buffers.post2;
     public ComputeBuffer DetectionCountBuffer => _buffers.countRead;
 
+    public void SetIndirectDrawCount(ComputeBuffer drawArgs)
+      => ComputeBuffer.CopyCount(_buffers.post2, drawArgs, sizeof(uint));
+
     #endregion
 
     #region Private objects

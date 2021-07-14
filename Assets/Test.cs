@@ -11,30 +11,34 @@ public sealed class Test : MonoBehaviour
 
     ObjectDetector _detector;
     Material _material;
+    ComputeBuffer _drawArgs;
 
     void Start()
     {
         _detector = new ObjectDetector(_resources);
         _material = new Material(_shader);
-        _material.SetColor("_FillColor", Color.red);
+        _drawArgs = new ComputeBuffer
+          (4, sizeof(uint), ComputeBufferType.IndirectArguments);
+        _drawArgs.SetData(new [] {6, 0, 0, 0});
     }
 
     void OnDestroy()
     {
         _detector.Dispose();
         Destroy(_material);
+        _drawArgs.Dispose();
     }
 
     void LateUpdate()
     {
         _detector.ProcessImage(_source.Texture);
+        _detector.SetIndirectDrawCount(_drawArgs);
 
         _material.SetBuffer("_Detections", _detector.DetectionBuffer);
-        _material.SetBuffer("_DetectionCount", _detector.DetectionCountBuffer);
 
-        Graphics.DrawProcedural
+        Graphics.DrawProceduralIndirect
           (_material, new Bounds(Vector3.zero, Vector3.one * 1000),
-           MeshTopology.Triangles, 6, 256);
+           MeshTopology.Triangles, _drawArgs);
 
         _preview.texture = _source.Texture;
     }
