@@ -40,7 +40,10 @@ public sealed class ObjectDetector : System.IDisposable
 
     ResourceSet _resources;
     int _inputSize;
+    int _classCount;
     IWorker _worker;
+
+    const int AnchorCount = 3;
 
     int FeatureMap1Size
       => _inputSize * _inputSize / (32 * 32);
@@ -49,7 +52,7 @@ public sealed class ObjectDetector : System.IDisposable
       => _inputSize * _inputSize / (16 * 16);
 
     int FeatureDataSize
-      => 25 * 3;
+      => (5 + _classCount) * AnchorCount;
 
     (ComputeBuffer preprocess,
      RenderTexture features1,
@@ -62,6 +65,9 @@ public sealed class ObjectDetector : System.IDisposable
         var model = ModelLoader.Load(_resources.model);
 
         _inputSize = model.inputs[0].shape[6]; // W in (****NHWC)
+
+        var outc = model.GetShapeByName(model.outputs[0]).Value.channels;
+        _classCount = outc / AnchorCount - 5;
 
         _worker = model.CreateWorker();
 
