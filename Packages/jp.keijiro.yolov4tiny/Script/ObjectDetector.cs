@@ -20,7 +20,7 @@ public sealed class ObjectDetector : System.IDisposable
 
     public int InputSize => _inputSize;
     public int ClassCount => _classCount;
-    public ComputeBuffer DetectionBuffer => _buffers.post1;
+    public ComputeBuffer DetectionBuffer => _buffers.post2;
     public ComputeBuffer DetectionCountBuffer => _buffers.count;
 
     #endregion
@@ -59,6 +59,7 @@ public sealed class ObjectDetector : System.IDisposable
      RenderTexture features1,
      RenderTexture features2,
      ComputeBuffer post1,
+     ComputeBuffer post2,
      ComputeBuffer count) _buffers;
 
     void AllocateObjects(ResourceSet resources)
@@ -83,6 +84,9 @@ public sealed class ObjectDetector : System.IDisposable
         _buffers.post1 = new ComputeBuffer
           (MaxDetection, Detection.Size, ComputeBufferType.Append);
 
+        _buffers.post2 = new ComputeBuffer
+          (MaxDetection, Detection.Size, ComputeBufferType.Append);
+
         _buffers.count = new ComputeBuffer
           (1, sizeof(uint), ComputeBufferType.Raw);
     }
@@ -103,6 +107,9 @@ public sealed class ObjectDetector : System.IDisposable
 
         _buffers.post1?.Dispose();
         _buffers.post1 = null;
+
+        _buffers.post2?.Dispose();
+        _buffers.post2 = null;
 
         _buffers.count?.Dispose();
         _buffers.count = null;
@@ -135,10 +142,10 @@ public sealed class ObjectDetector : System.IDisposable
           .Reshape(new TensorShape(1, FeatureMap2Size, FeatureDataSize, 1)))
             tensor.ToRenderTexture(_buffers.features2);
 
-        // 1st postprocess (detection data aggregation)
+        // First stage postprocessing (detection data aggregation)
         _buffers.post1.SetCounterValue(0);
 
-        var post1 = _resources.postprocess;
+        var post1 = _resources.postprocess1;
         post1.SetTexture(0, "Input", _buffers.features1);
         post1.SetInt("InputSize", 13);
         post1.SetInt("ClassCount", _classCount);
@@ -154,6 +161,19 @@ public sealed class ObjectDetector : System.IDisposable
 
         // Detection count
         ComputeBuffer.CopyCount(_buffers.post1, _buffers.count, 0);
+
+        // Second stage postprocessing (overlap removal)
+        _buffers.post2.SetCounterValue(0);
+
+        var post2 = _resources.postprocess2;
+        post2.SetFloat("Threshold", 0.5f);
+        post2.SetBuffer(0, "Input", _buffers.post1);
+        post2.SetBuffer(0, "Count", _buffers.count);
+        post2.SetBuffer(0, "Output", _buffers.post2);
+        post2.Dispatch(0, 1, 1, 1);
+
+        // Bounding box count after removal
+        ComputeBuffer.CopyCount(_buffers.post2, _buffers.count, 0);
     }
 
     #endregion

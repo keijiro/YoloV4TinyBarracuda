@@ -10,7 +10,8 @@ public sealed class ResourceSet : ScriptableObject
     public NNModel model;
     public float[] anchors = new float[12];
     public ComputeShader preprocess;
-    public ComputeShader postprocess;
+    public ComputeShader postprocess1;
+    public ComputeShader postprocess2;
 }
 
 } // namespace YoloV4Tiny

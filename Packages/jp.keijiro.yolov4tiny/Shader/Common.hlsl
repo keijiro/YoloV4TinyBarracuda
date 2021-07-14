@@ -1,6 +1,8 @@
 #ifndef _YOLOV4TINYBARRACUDA_COMMON_H_
 #define _YOLOV4TINYBARRACUDA_COMMON_H_
 
+#define MAX_DETECTION 256
+
 // Constants defined in the YOLOv4-tiny model
 #define ANCHOR_COUNT 3
 
