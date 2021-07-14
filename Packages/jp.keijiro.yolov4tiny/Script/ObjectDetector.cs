@@ -7,6 +7,8 @@ public sealed class ObjectDetector : System.IDisposable
 {
     #region Public members
 
+    public const int MaxDetection = 256;
+
     public ObjectDetector(ResourceSet resources)
       => AllocateObjects(resources);
 
@@ -16,23 +18,10 @@ public sealed class ObjectDetector : System.IDisposable
     public void ProcessImage(Texture sourceTexture)
       => RunModel(sourceTexture);
 
-    public RenderTexture FeatureMap1
-      => _buffers.features1;
-
-    public RenderTexture FeatureMap2
-      => _buffers.features2;
-
-    public float[] MakeAnchorArray(int i1, int i2, int i3)
-    {
-        var scale = 1.0f / _inputSize;
-        return new float[]
-          { _resources.anchors[i1 * 2 + 0] * scale,
-            _resources.anchors[i1 * 2 + 1] * scale,
-            _resources.anchors[i2 * 2 + 0] * scale,
-            _resources.anchors[i2 * 2 + 1] * scale,
-            _resources.anchors[i3 * 2 + 0] * scale,
-            _resources.anchors[i3 * 2 + 1] * scale };
-    }
+    public int InputSize => _inputSize;
+    public int ClassCount => _classCount;
+    public ComputeBuffer DetectionBuffer => _buffers.post1;
+    public ComputeBuffer DetectionCountBuffer => _buffers.count;
 
     #endregion
 
@@ -54,9 +43,23 @@ public sealed class ObjectDetector : System.IDisposable
     int FeatureDataSize
       => (5 + _classCount) * AnchorCount;
 
+    float[] MakeAnchorArray(int i1, int i2, int i3)
+    {
+        var scale = 1.0f / _inputSize;
+        return new float[]
+          { _resources.anchors[i1 * 2 + 0] * scale,
+            _resources.anchors[i1 * 2 + 1] * scale, 0, 0,
+            _resources.anchors[i2 * 2 + 0] * scale,
+            _resources.anchors[i2 * 2 + 1] * scale, 0, 0,
+            _resources.anchors[i3 * 2 + 0] * scale,
+            _resources.anchors[i3 * 2 + 1] * scale, 0, 0 };
+    }
+
     (ComputeBuffer preprocess,
      RenderTexture features1,
-     RenderTexture features2) _buffers;
+     RenderTexture features2,
+     ComputeBuffer post1,
+     ComputeBuffer count) _buffers;
 
     void AllocateObjects(ResourceSet resources)
     {
@@ -71,9 +74,17 @@ public sealed class ObjectDetector : System.IDisposable
 
         _worker = model.CreateWorker();
 
-        _buffers = (new ComputeBuffer(_inputSize * _inputSize * 3, sizeof(float)),
-                    RTUtil.NewFloat(FeatureDataSize, FeatureMap1Size),
-                    RTUtil.NewFloat(FeatureDataSize, FeatureMap2Size));
+        _buffers.preprocess = new ComputeBuffer
+          (_inputSize * _inputSize * 3, sizeof(float));
+
+        _buffers.features1 = RTUtil.NewFloat(FeatureDataSize, FeatureMap1Size);
+        _buffers.features2 = RTUtil.NewFloat(FeatureDataSize, FeatureMap2Size);
+
+        _buffers.post1 = new ComputeBuffer
+          (MaxDetection, Detection.Size, ComputeBufferType.Append);
+
+        _buffers.count = new ComputeBuffer
+          (1, sizeof(uint), ComputeBufferType.Raw);
     }
 
     void DeallocateObjects()
@@ -89,6 +100,12 @@ public sealed class ObjectDetector : System.IDisposable
 
         ObjectUtil.Destroy(_buffers.features2);
         _buffers.features2 = null;
+
+        _buffers.post1?.Dispose();
+        _buffers.post1 = null;
+
+        _buffers.count?.Dispose();
+        _buffers.count = null;
     }
 
     #endregion
@@ -117,6 +134,26 @@ public sealed class ObjectDetector : System.IDisposable
         using (var tensor = _worker.PeekOutput("Identity_1")
           .Reshape(new TensorShape(1, FeatureMap2Size, FeatureDataSize, 1)))
             tensor.ToRenderTexture(_buffers.features2);
+
+        // 1st postprocess (detection data aggregation)
+        _buffers.post1.SetCounterValue(0);
+
+        var post1 = _resources.postprocess;
+        post1.SetTexture(0, "Input", _buffers.features1);
+        post1.SetInt("InputSize", 13);
+        post1.SetInt("ClassCount", _classCount);
+        post1.SetFloats("Anchors", MakeAnchorArray(3, 4, 5));
+        post1.SetFloat("Threshold", 0.1f);
+        post1.SetBuffer(0, "Output", _buffers.post1);
+        post1.DispatchThreads(0, 13, 13, 1);
+
+        post1.SetTexture(0, "Input", _buffers.features2);
+        post1.SetInt("InputSize", 26);
+        post1.SetFloats("Anchors", MakeAnchorArray(1, 2, 3));
+        post1.DispatchThreads(0, 26, 26, 1);
+
+        // Detection count
+        ComputeBuffer.CopyCount(_buffers.post1, _buffers.count, 0);
     }
 
     #endregion

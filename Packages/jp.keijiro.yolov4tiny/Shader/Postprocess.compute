@@ -1,39 +1,65 @@
-#pragma kernel Postprocess
-#pragma kernel Cleanup
+//
+// First stage postprocessing (detection data aggregation)
+//
 
-// Parameters
-uint2 Size;
+#pragma kernel Postprocess1
+
+#include "Common.hlsl"
+
+// Input
+Texture2D<float> Input;
+uint InputSize;
+uint ClassCount;
+float2 Anchors[ANCHOR_COUNT];
 float Threshold;
 
-// Input buffers
-Texture2D<float> Scores;
-Texture2D<float4> Offsets;
-
 // Output buffer
-RWTexture2D<float4> Output;
-RWStructuredBuffer<uint> Counter;
-uint MaxDetection;
+AppendStructuredBuffer<Detection> Output;
 
 [numthreads(8, 8, 1)]
-void Postprocess(uint2 id : SV_DispatchThreadID)
+void Postprocess1(uint2 id : SV_DispatchThreadID)
 {
-    if (Scores[id] < Threshold) return;
+    if (!all(id < InputSize)) return;
 
-    float4 offs = Offsets[id] * float2(1, -1).xyxy;
-    float4 pos = id.xyxy + offs;
+    // Input reference point: We have to read the input in reversed order.
+    uint ref_y = (InputSize - 1 - id.y) * InputSize + (InputSize - 1 - id.x);
 
-    uint count = Counter.IncrementCounter();
-    if (count < MaxDetection)
-        Output[uint2(count, 0)] = pos * 2 / Size.xyxy - 0.5;
-}
-
-[numthreads(64, 1, 1)]
-void Cleanup(uint id : SV_DispatchThreadID)
-{
-    while (true)
+    for (uint aidx = 0; aidx < ANCHOR_COUNT; aidx++)
     {
-        uint count = Counter.IncrementCounter();
-        if (count >= MaxDetection) break;
-        Output[uint2(count, 0)] = 0;
+        uint ref_x = aidx * (5 + ClassCount);
+
+        // Bounding box / confidence
+        float x = Input[uint2(ref_x + 0, ref_y)];
+        float y = Input[uint2(ref_x + 1, ref_y)];
+        float w = Input[uint2(ref_x + 2, ref_y)];
+        float h = Input[uint2(ref_x + 3, ref_y)];
+        float c = Input[uint2(ref_x + 4, ref_y)];
+
+        // ArgMax[SoftMax[classes]]
+        uint maxClass = 0;
+        float maxScore = exp(Input[uint2(ref_x + 5, ref_y)].x);
+        float scoreSum = maxScore;
+        for (uint cidx = 1; cidx < ClassCount; cidx++)
+        {
+            float score = exp(Input[uint2(ref_x + 5 + cidx, ref_y)].x);
+            if (score > maxScore)
+            {
+                maxClass = cidx;
+                maxScore = score;
+            }
+            scoreSum += score;
+        }
+
+        // Output structure
+        Detection data;
+        data.x = (id.x + Sigmoid(x)) / InputSize;
+        data.y = (id.y + Sigmoid(y)) / InputSize;
+        data.w = exp(w) * Anchors[aidx].x;
+        data.h = exp(h) * Anchors[aidx].y;
+        data.classIndex = maxClass;
+        data.score = Sigmoid(c) * maxScore / scoreSum;
+
+        // Thresholding
+        if (data.score > Threshold) Output.Append(data);
     }
 }

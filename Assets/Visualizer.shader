@@ -3,63 +3,34 @@ Shader "Hidden/YOLOv4-tiny/Visualizer"
     CGINCLUDE
 
     #include "UnityCG.cginc"
+    #include "Packages/jp.keijiro.yolov4tiny/Shader/Common.hlsl"
 
-    Texture2D<float> _FeatureMap;
-    uint _GridCount;
+    StructuredBuffer<Detection> _Detections;
+    ByteAddressBuffer _DetectionCount;
     float4 _FillColor;
-    float _Anchors[6];
-
-    float Sigmoid(float x)
-    {
-        return x / (1 + exp(x));
-    }
 
     void Vertex(uint vid : SV_VertexID,
                 uint iid : SV_InstanceID,
                 out float4 position : SV_Position,
                 out float4 color : COLOR)
     {
-        uint idx = iid / 3;
+        uint detectionCount = _DetectionCount.Load(0);
+        bool mask = iid < detectionCount;
 
-        uint ix = idx % _GridCount; 
-        uint iy = idx / _GridCount; 
+        Detection d = _Detections[iid];
 
-        uint ref_y = (_GridCount - 1 - iy) * _GridCount +
-                     (_GridCount - 1 - ix);
+        float x = d.x + d.w * lerp(-0.5, 0.5, vid & 1);
+        float y = d.y + d.h * lerp(-0.5, 0.5, vid < 2 || vid == 5);
 
-        uint anchor = iid % 3;
-        uint ref_x = anchor * 25;
-
-        float x = _FeatureMap[uint2(ref_x + 0, ref_y)];
-        float y = _FeatureMap[uint2(ref_x + 1, ref_y)];
-        float w = _FeatureMap[uint2(ref_x + 2, ref_y)];
-        float h = _FeatureMap[uint2(ref_x + 3, ref_y)];
-        float c = _FeatureMap[uint2(ref_x + 4, ref_y)];
-
-        c = Sigmoid(c);
-        x = Sigmoid(x) / _GridCount;
-        y = Sigmoid(y) / _GridCount;
-        w = exp(w) * _Anchors[anchor * 2 + 0];
-        h = exp(h) * _Anchors[anchor * 2 + 1];
-
-        float vx = idx % _GridCount; 
-        float vy = idx / _GridCount; 
-
-        vx = (vx + 0.5) / _GridCount;
-        vy = (vy + 0.5) / _GridCount;
-
-        vx += w * lerp(-0.5, 0.5, vid & 1);
-        vy += h * lerp(-0.5, 0.5, vid < 2 || vid == 5);
-
-        vx =  x +     vx * 2 - 1;
-        vy = -y + 1 - vy * 2;
+        x = 2 * x - 1;
+        y = 1 - y * 2;
 
         // Aspect ratio compensation
-        vx = vx * _ScreenParams.y / _ScreenParams.x;
+        x = x * _ScreenParams.y / _ScreenParams.x;
 
         // Vertex attributes
-        position = float4(vx, vy, 1, 1);
-        color = float4(1, 1, 1, c) * _FillColor;
+        position = float4(x, y, 1, 1);
+        color = float4(1, 1, 1, d.score * mask) * _FillColor;
     }
 
     float4 Fragment(float4 position : SV_Position,
