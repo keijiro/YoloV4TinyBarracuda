@@ -7,7 +7,7 @@ Shader "Hidden/YOLOv4-tiny/Visualizer"
     Texture2D<float> _FeatureMap;
     uint _GridCount;
     float4 _FillColor;
-    float4 _Anchors[3];
+    float _Anchors[6];
 
     float Sigmoid(float x)
     {
@@ -39,8 +39,8 @@ Shader "Hidden/YOLOv4-tiny/Visualizer"
         c = Sigmoid(c);
         x = Sigmoid(x) / _GridCount;
         y = Sigmoid(y) / _GridCount;
-        w = exp(w) * _Anchors[anchor].x;
-        h = exp(h) * _Anchors[anchor].y;
+        w = exp(w) * _Anchors[anchor * 2 + 0];
+        h = exp(h) * _Anchors[anchor * 2 + 1];
 
         float vx = idx % _GridCount; 
         float vy = idx / _GridCount; 

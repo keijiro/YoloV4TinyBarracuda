@@ -22,8 +22,17 @@ public sealed class ObjectDetector : System.IDisposable
     public RenderTexture FeatureMap2
       => _buffers.features2;
 
-    public Vector4[] MakeAnchorArray(int i1, int i2, int i3)
-      => new [] { GetAnchor(i1), GetAnchor(i2), GetAnchor(i3) };
+    public float[] MakeAnchorArray(int i1, int i2, int i3)
+    {
+        var scale = 1.0f / _inputSize;
+        return new float[]
+          { _resources.anchors[i1 * 2 + 0] * scale,
+            _resources.anchors[i1 * 2 + 1] * scale,
+            _resources.anchors[i2 * 2 + 0] * scale,
+            _resources.anchors[i2 * 2 + 1] * scale,
+            _resources.anchors[i3 * 2 + 0] * scale,
+            _resources.anchors[i3 * 2 + 1] * scale };
+    }
 
     #endregion
 
@@ -45,10 +54,6 @@ public sealed class ObjectDetector : System.IDisposable
     (ComputeBuffer preprocess,
      RenderTexture features1,
      RenderTexture features2) _buffers;
-
-    Vector4 GetAnchor(int i)
-      => new Vector4((float)_resources.anchors[i * 2 + 0] / _inputSize,
-                     (float)_resources.anchors[i * 2 + 1] / _inputSize, 0, 0);
 
     void AllocateObjects(ResourceSet resources)
     {

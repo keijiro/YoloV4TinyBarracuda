@@ -30,8 +30,8 @@ public sealed class Test : MonoBehaviour
         _material1.SetColor("_FillColor", Color.red);
         _material2.SetColor("_FillColor", Color.blue);
 
-        _material1.SetVectorArray("_Anchors", _detector.MakeAnchorArray(3, 4, 5));
-        _material2.SetVectorArray("_Anchors", _detector.MakeAnchorArray(1, 2, 3));
+        _material1.SetFloatArray("_Anchors", _detector.MakeAnchorArray(3, 4, 5));
+        _material2.SetFloatArray("_Anchors", _detector.MakeAnchorArray(1, 2, 3));
     }
 
     void OnDestroy()
