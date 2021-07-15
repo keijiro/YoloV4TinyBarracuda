@@ -2,10 +2,8 @@ using System.Runtime.InteropServices;
 
 namespace YoloV4Tiny {
 
-//
 // Detection data structure - The layout of this structure must be matched
 // with the one defined in Common.hlsl.
-//
 [StructLayout(LayoutKind.Sequential)]
 public readonly struct Detection
 {

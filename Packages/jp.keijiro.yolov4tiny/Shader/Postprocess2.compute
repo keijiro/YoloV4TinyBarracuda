@@ -1,6 +1,4 @@
-//
 // Second stage postprocessing (overlap removal)
-//
 
 #pragma kernel Postprocess2
 
@@ -8,14 +6,14 @@
 
 // Input
 StructuredBuffer<Detection> Input;
-RWStructuredBuffer<uint> InputCount;
+RWStructuredBuffer<uint> InputCount; // Only used as a counter
 float Threshold;
 
 // Output
 AppendStructuredBuffer<Detection> Output;
 
 // Local arrays for data cache
-groupshared Detection _detections[MAX_DETECTION];
+groupshared Detection _entries[MAX_DETECTION];
 groupshared bool _flags[MAX_DETECTION];
 
 [numthreads(1, 1, 1)]
@@ -27,7 +25,7 @@ void Postprocess2(uint3 id : SV_DispatchThreadID)
 
     for (uint i = 0; i < entry_count; i++)
     {
-        _detections[i] = Input[i];
+        _entries[i] = Input[i];
         _flags[i] = true;
     }
 
@@ -41,14 +39,15 @@ void Postprocess2(uint3 id : SV_DispatchThreadID)
             if (!_flags[j]) continue;
 
             // Overlap test
-            if (CalculateIOU(_detections[i], _detections[j]) < Threshold)
+            if (CalculateIOU(_entries[i], _entries[j]) < Threshold)
                 continue;
 
             // Score comparison
-            if (_detections[i].score < _detections[j].score)
+            if (_entries[i].score < _entries[j].score)
             {
                 _flags[i] = false;
-                // The detection in the outer loop is removed. Break the inner loop.
+                // The detection in the outer loop is removed.
+                // Break the inner loop.
                 break;
             }
             else
@@ -58,5 +57,5 @@ void Postprocess2(uint3 id : SV_DispatchThreadID)
 
     // Output aggregation
     for (i = 0; i < entry_count; i++)
-        if (_flags[i]) Output.Append(_detections[i]);
+        if (_flags[i]) Output.Append(_entries[i]);
 }

@@ -17,78 +17,70 @@ public sealed class ObjectDetector : System.IDisposable
     public void ProcessImage(Texture sourceTexture, float threshold)
       => RunModel(sourceTexture, threshold);
 
-    public const int MaxDetection = 512;
+    public IEnumerable<Detection> Detections
+      => _readCache.Cached;
 
-    public int InputSize => _inputSize;
-    public int ClassCount => _classCount;
+    public ComputeBuffer DetectionBuffer
+      => _buffers.post2;
 
-    public ComputeBuffer DetectionBuffer => _buffers.post2;
-    public ComputeBuffer DetectionCountBuffer => _buffers.countRead;
+    public ComputeBuffer DetectionCountBuffer
+      => _buffers.countRead;
 
     public void SetIndirectDrawCount(ComputeBuffer drawArgs)
       => ComputeBuffer.CopyCount(_buffers.post2, drawArgs, sizeof(uint));
-
-    public IEnumerable<Detection> Detections
-      => _post2ReadCache ?? UpdatePost2ReadCache();
 
     #endregion
 
     #region Private objects
 
     ResourceSet _resources;
+    Config _config;
     IWorker _worker;
 
-    int _inputSize;
-    int _classCount;
-
-    const int AnchorCount = 3;
-
-    int FeatureMap1Size
-      => _inputSize * _inputSize / (32 * 32);
-
-    int FeatureMap2Size
-      => _inputSize * _inputSize / (16 * 16);
-
-    int FeatureDataSize
-      => (5 + _classCount) * AnchorCount;
-
     (ComputeBuffer preprocess,
-     RenderTexture features1,
-     RenderTexture features2,
+     RenderTexture feature1,
+     RenderTexture feature2,
      ComputeBuffer post1,
      ComputeBuffer post2,
-     ComputeBuffer count,
+     ComputeBuffer counter,
      ComputeBuffer countRead) _buffers;
+
+    DetectionCache _readCache;
 
     void AllocateObjects(ResourceSet resources)
     {
+        // NN model loading
+        var model = ModelLoader.Load(resources.model);
+
+        // Private object initialization
         _resources = resources;
-
-        var model = ModelLoader.Load(_resources.model);
-
-        _inputSize = model.inputs[0].shape[6]; // W in (****NHWC)
-
-        var outc = model.GetShapeByName(model.outputs[0]).Value.channels;
-        _classCount = outc / AnchorCount - 5;
-
+        _config = new Config(resources, model);
         _worker = model.CreateWorker();
 
+        // Buffer allocation
         _buffers.preprocess = new ComputeBuffer
-          (_inputSize * _inputSize * 3, sizeof(float));
+          (_config.InputFootprint, sizeof(float));
 
-        _buffers.features1 = RTUtil.NewFloat(FeatureDataSize, FeatureMap1Size);
-        _buffers.features2 = RTUtil.NewFloat(FeatureDataSize, FeatureMap2Size);
+        _buffers.feature1 = RTUtil.NewFloat
+          (_config.FeatureDataSize, _config.FeatureMap1Footprint);
 
-        _buffers.post1 = new ComputeBuffer(MaxDetection, Detection.Size);
+        _buffers.feature2 = RTUtil.NewFloat
+          (_config.FeatureDataSize, _config.FeatureMap2Footprint);
+
+        _buffers.post1 = new ComputeBuffer
+          (Config.MaxDetection, Detection.Size);
 
         _buffers.post2 = new ComputeBuffer
-          (MaxDetection, Detection.Size, ComputeBufferType.Append);
+          (Config.MaxDetection, Detection.Size, ComputeBufferType.Append);
 
-        _buffers.count = new ComputeBuffer
+        _buffers.counter = new ComputeBuffer
           (1, sizeof(uint), ComputeBufferType.Counter);
 
         _buffers.countRead = new ComputeBuffer
           (1, sizeof(uint), ComputeBufferType.Raw);
+
+        // Detection data read cache initialization
+        _readCache = new DetectionCache(_buffers.post2, _buffers.countRead);
     }
 
     void DeallocateObjects()
@@ -99,11 +91,11 @@ public sealed class ObjectDetector : System.IDisposable
         _buffers.preprocess?.Dispose();
         _buffers.preprocess = null;
 
-        ObjectUtil.Destroy(_buffers.features1);
-        _buffers.features1 = null;
+        ObjectUtil.Destroy(_buffers.feature1);
+        _buffers.feature1 = null;
 
-        ObjectUtil.Destroy(_buffers.features2);
-        _buffers.features2 = null;
+        ObjectUtil.Destroy(_buffers.feature2);
+        _buffers.feature2 = null;
 
         _buffers.post1?.Dispose();
         _buffers.post1 = null;
@@ -111,23 +103,11 @@ public sealed class ObjectDetector : System.IDisposable
         _buffers.post2?.Dispose();
         _buffers.post2 = null;
 
-        _buffers.count?.Dispose();
-        _buffers.count = null;
+        _buffers.counter?.Dispose();
+        _buffers.counter = null;
 
         _buffers.countRead?.Dispose();
         _buffers.countRead = null;
-    }
-
-    float[] MakeAnchorArray(int i1, int i2, int i3)
-    {
-        var scale = 1.0f / _inputSize;
-        return new float[]
-          { _resources.anchors[i1 * 2 + 0] * scale,
-            _resources.anchors[i1 * 2 + 1] * scale, 0, 0,
-            _resources.anchors[i2 * 2 + 0] * scale,
-            _resources.anchors[i2 * 2 + 1] * scale, 0, 0,
-            _resources.anchors[i3 * 2 + 0] * scale,
-            _resources.anchors[i3 * 2 + 1] * scale, 0, 0 };
     }
 
     #endregion
@@ -138,70 +118,57 @@ public sealed class ObjectDetector : System.IDisposable
     {
         // Preprocessing
         var pre = _resources.preprocess;
-        pre.SetInt("Size", _inputSize);
+        pre.SetInt("Size", _config.InputWidth);
         pre.SetTexture(0, "Image", source);
         pre.SetBuffer(0, "Tensor", _buffers.preprocess);
-        pre.DispatchThreads(0, _inputSize, _inputSize, 1);
+        pre.DispatchThreads(0, _config.InputWidth, _config.InputWidth, 1);
 
         // NN worker invocation
-        using (var tensor = new Tensor(1, _inputSize, _inputSize, 3,
-                                       _buffers.preprocess))
-            _worker.Execute(tensor);
+        using (var t = new Tensor(_config.InputShape, _buffers.preprocess))
+            _worker.Execute(t);
 
-        // Postprocessing
-        using (var tensor = _worker.PeekOutput("Identity")
-          .Reshape(new TensorShape(1, FeatureMap1Size, FeatureDataSize, 1)))
-            tensor.ToRenderTexture(_buffers.features1);
+        // NN output retrieval
+        _worker.CopyOutput("Identity", _buffers.feature1);
+        _worker.CopyOutput("Identity_1", _buffers.feature2); 
 
-        using (var tensor = _worker.PeekOutput("Identity_1")
-          .Reshape(new TensorShape(1, FeatureMap2Size, FeatureDataSize, 1)))
-            tensor.ToRenderTexture(_buffers.features2);
+        // Counter buffer reset
+        _buffers.post2.SetCounterValue(0);
+        _buffers.counter.SetCounterValue(0);
 
-        // First stage postprocessing (detection data aggregation)
-        _buffers.count.SetCounterValue(0);
-
+        // First stage postprocessing: detection data aggregation
         var post1 = _resources.postprocess1;
-        post1.SetTexture(0, "Input", _buffers.features1);
-        post1.SetInt("InputSize", 13);
-        post1.SetInt("ClassCount", _classCount);
-        post1.SetFloats("Anchors", MakeAnchorArray(3, 4, 5));
+        post1.SetInt("ClassCount", _config.ClassCount);
         post1.SetFloat("Threshold", threshold);
         post1.SetBuffer(0, "Output", _buffers.post1);
-        post1.SetBuffer(0, "OutputCount", _buffers.count);
-        post1.DispatchThreads(0, 13, 13, 1);
+        post1.SetBuffer(0, "OutputCount", _buffers.counter);
 
-        post1.SetTexture(0, "Input", _buffers.features2);
-        post1.SetInt("InputSize", 26);
-        post1.SetFloats("Anchors", MakeAnchorArray(1, 2, 3));
-        post1.DispatchThreads(0, 26, 26, 1);
+        // (feature map 1)
+        var width1 = _config.FeatureMap1Width;
+        post1.SetTexture(0, "Input", _buffers.feature1);
+        post1.SetInt("InputSize", width1);
+        post1.SetFloats("Anchors", _config.AnchorArray1);
+        post1.DispatchThreads(0, width1, width1, 1);
 
-        // Second stage postprocessing (overlap removal)
-        _buffers.post2.SetCounterValue(0);
+        // (feature map 2)
+        var width2 = _config.FeatureMap2Width;
+        post1.SetTexture(0, "Input", _buffers.feature2);
+        post1.SetInt("InputSize", width2);
+        post1.SetFloats("Anchors", _config.AnchorArray2);
+        post1.DispatchThreads(0, width2, width2, 1);
 
+        // Second stage postprocessing: overlap removal
         var post2 = _resources.postprocess2;
         post2.SetFloat("Threshold", 0.5f);
         post2.SetBuffer(0, "Input", _buffers.post1);
-        post2.SetBuffer(0, "InputCount", _buffers.count);
+        post2.SetBuffer(0, "InputCount", _buffers.counter);
         post2.SetBuffer(0, "Output", _buffers.post2);
         post2.Dispatch(0, 1, 1, 1);
 
         // Bounding box count after removal
         ComputeBuffer.CopyCount(_buffers.post2, _buffers.countRead, 0);
-    }
 
-    #endregion
-
-    #region GPU to CPU readback function
-
-    Detection[] _post2ReadCache;
-    int[] _countReadCache = new int[1];
-
-    Detection[] UpdatePost2ReadCache()
-    {
-        _buffers.countRead.GetData(_countReadCache, 0, 0, 1);
-        var buffer = new Detection[_countReadCache[0]];
-        _buffers.post2.GetData(buffer, 0, 0, buffer.Length);
-        return buffer;
+        // Cache data invalidation
+        _readCache.Invalidate();
     }
 
     #endregion

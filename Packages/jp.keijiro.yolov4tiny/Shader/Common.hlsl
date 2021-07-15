@@ -1,12 +1,12 @@
 #ifndef _YOLOV4TINYBARRACUDA_COMMON_H_
 #define _YOLOV4TINYBARRACUDA_COMMON_H_
 
+// Compile-time constants
 #define MAX_DETECTION 512
-
-// Constants defined in the YOLOv4-tiny model
 #define ANCHOR_COUNT 3
 
-// Detection data structure used for storing object detection results
+// Detection data structure - The layout of this structure must be matched
+// with the one defined in Detection.cs.
 struct Detection
 {
     float x, y, w, h;
@@ -14,7 +14,7 @@ struct Detection
     float score;
 };
 
-// Common math functions
+// Misc math functions
 
 float CalculateIOU(in Detection d1, in Detection d2)
 {
