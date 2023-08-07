@@ -7,7 +7,8 @@
 // Input
 StructuredBuffer<Detection> Input;
 RWStructuredBuffer<uint> InputCount; // Only used as a counter
-float Threshold;
+float IouThreshold;
+uint ClassCount;
 
 // Output
 AppendStructuredBuffer<Detection> Output;
@@ -23,39 +24,55 @@ void Postprocess2(uint3 id : SV_DispatchThreadID)
     uint entry_count = min(MAX_DETECTION, InputCount.IncrementCounter());
     if (entry_count == 0) return;
 
-    for (uint i = 0; i < entry_count; i++)
+    // Apply for each class
+    for (uint c = 0; c < ClassCount; c++)
     {
-        _entries[i] = Input[i];
-        _flags[i] = true;
-    }
-
-    // Overlap test permutation
-    for (i = 0; i < entry_count - 1; i++)
-    {
-        if (!_flags[i]) continue;
-
-        for (uint j = i + 1; j < entry_count; j++)
+        // Separate detections by class
+        uint count = 0;
+        for (uint i = 0; i < entry_count; i++)
         {
-            if (!_flags[j]) continue;
+            if (Input[i].classIndex != c) continue;
 
-            // Overlap test
-            if (CalculateIOU(_entries[i], _entries[j]) < Threshold)
-                continue;
-
-            // Score comparison
-            if (_entries[i].score < _entries[j].score)
-            {
-                _flags[i] = false;
-                // The detection in the outer loop is removed.
-                // Break the inner loop.
-                break;
-            }
-            else
-                _flags[j] = false;
+            // Store the detection in the cache arrays
+            _entries[count] = Input[i];
+            _flags[count] = true;
+            count++;
         }
-    }
 
-    // Output aggregation
-    for (i = 0; i < entry_count; i++)
-        if (_flags[i]) Output.Append(_entries[i]);
+        if (count == 0) continue;
+
+        // Sort detections by score
+        for (i = 0; i < count - 1; i++)
+        {
+            for (uint j = i + 1; j < count; j++)
+            {
+                // Score comparison
+                if (_entries[i].score < _entries[j].score)
+                {
+                    Detection temp = _entries[i];
+                    _entries[i] = _entries[j];
+                    _entries[j] = temp;
+                }
+            }
+        }
+
+        // Overlap test permutation
+        for (i = 0; i < count - 1; i++)
+        {
+            if (!_flags[i]) continue;
+
+            for (uint j = i + 1; j < count; j++)
+            {
+                if (!_flags[j]) continue;
+
+                // Overlap test
+                if (CalculateIOU(_entries[i], _entries[j]) > IouThreshold)
+                    _flags[j] = false;
+            }
+        }
+
+        // Output aggregation
+        for (i = 0; i < count; i++)
+            if (_flags[i]) Output.Append(_entries[i]);
+    }
 }

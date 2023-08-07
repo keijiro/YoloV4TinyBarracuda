@@ -9,7 +9,7 @@ Texture2D<float> Input;
 uint InputSize;
 float2 Anchors[ANCHOR_COUNT];
 uint ClassCount;
-float Threshold;
+float ConfidenceThreshold;
 
 // Output buffer
 RWStructuredBuffer<Detection> Output;
@@ -33,21 +33,19 @@ void Postprocess1(uint2 id : SV_DispatchThreadID)
         float y = Input[uint2(ref_x + 1, ref_y)];
         float w = Input[uint2(ref_x + 2, ref_y)];
         float h = Input[uint2(ref_x + 3, ref_y)];
-        float c = Input[uint2(ref_x + 4, ref_y)];
+        float boxConfidence = Input[uint2(ref_x + 4, ref_y)];
+        float classProbs = Input[uint2(ref_x + 5, ref_y)];
 
-        // ArgMax[SoftMax[classes]]
+        // Calc classProbs & maxClass
         uint maxClass = 0;
-        float maxScore = exp(Input[uint2(ref_x + 5, ref_y)]);
-        float scoreSum = maxScore;
         for (uint cidx = 1; cidx < ClassCount; cidx++)
         {
-            float score = exp(Input[uint2(ref_x + 5 + cidx, ref_y)]);
-            if (score > maxScore)
+            float classProbsTemp = Input[uint2(ref_x + 5 + cidx, ref_y)];
+            if (classProbsTemp > classProbs)
             {
+                classProbs = classProbsTemp;
                 maxClass = cidx;
-                maxScore = score;
             }
-            scoreSum += score;
         }
 
         // Output structure
@@ -57,14 +55,17 @@ void Postprocess1(uint2 id : SV_DispatchThreadID)
         data.w = exp(w) * Anchors[aidx].x;
         data.h = exp(h) * Anchors[aidx].y;
         data.classIndex = maxClass;
-        data.score = Sigmoid(c) * maxScore / scoreSum;
+        data.score = Sigmoid(boxConfidence) * Sigmoid(classProbs);
 
         // Thresholding
-        if (data.score > Threshold)
+        if (data.score > ConfidenceThreshold)
         {
             // Detected: Count and output
             uint count = OutputCount.IncrementCounter();
-            if (count < MAX_DETECTION) Output[count] = data;
+            if (count < MAX_DETECTION)
+            {
+                Output[count] = data;
+            }
         }
     }
 }
